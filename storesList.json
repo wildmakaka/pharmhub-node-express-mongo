@@ -1,0 +1,11 @@
+[
+  {
+    "storeName": "niko-opt",
+    "dataUrl": "http://niko-opt.com/price_two.csv",
+    "fileName": "niko-opt-prices.csv",
+    "separator": ";",
+    "itemIdColumn": 0,
+    "itemNameColumn": 1,
+    "itemPriceColumn": 9
+  }
+]
