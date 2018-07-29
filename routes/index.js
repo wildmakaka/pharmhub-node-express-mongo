@@ -85,7 +85,7 @@ const deleteOldDataFile = store => {
   return new Promise((resolve, reject) => {
     const dest = path.resolve(__dirname, '..', 'datafiles', store.fileName);
 
-    fs.stat(dest, function(err, stats) {
+    fs.stat(dest, (err, stats) => {
       if (err && err.code == 'ENOENT') {
         resolve('Файл отсутствует! Удалять не нужно. Все ОК!');
       }
@@ -96,7 +96,7 @@ const deleteOldDataFile = store => {
 
       fs.unlink(
         path.resolve(__dirname, '..', 'datafiles', store.fileName),
-        function(err) {
+        err => {
           if (err) {
             reject(err);
           }
@@ -115,14 +115,14 @@ const downloadNewDataFile = store => {
 
     const file = fs.createWriteStream(dest);
     const request = http
-      .get(url, function(response) {
+      .get(url, response => {
         response.pipe(file);
-        file.on('finish', function() {
+        file.on('finish', () => {
           file.close();
           resolve('Файл успешно скачан!');
         });
       })
-      .on('error', function(err) {
+      .on('error', err => {
         fs.unlink(dest);
         reject(err);
       });
@@ -131,10 +131,7 @@ const downloadNewDataFile = store => {
 
 const deleteStoreFromDB = store => {
   return new Promise((resolve, reject) => {
-    Store.collection.remove({ storeName: store.storeName }, function(
-      err,
-      result
-    ) {
+    Store.collection.remove({ storeName: store.storeName }, (err, result) => {
       if (err) {
         reject(err);
       } else {
@@ -152,11 +149,12 @@ const insertDataToDB = store => {
 
     fs.createReadStream(dest)
       .pipe(csv())
+
       .on('data', data => {
         prepareRow(data, store);
       })
       .on('end', data => {
-        Store.collection.insert(dataForImport, function(err, docs) {
+        Store.collection.insert(dataForImport, (err, docs) => {
           if (err) {
             reject(err);
           } else {
@@ -170,7 +168,7 @@ const insertDataToDB = store => {
 const prepareRow = (data, store) => {
   const dataToString = data.toString();
 
-  // let iconv = new Iconv('windows-1251', 'UTF-8');
+  // let iconv = new Iconv('windows-1255', 'UTF-8');
   // let str = iconv.convert(dataToString).toString();
 
   const separator = store.separator;
