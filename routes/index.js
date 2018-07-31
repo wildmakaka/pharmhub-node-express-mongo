@@ -1,13 +1,15 @@
+const csv = require('fast-csv');
 const express = require('express');
 const router = express.Router();
-const mongoose = require('mongoose');
 const StoresList = require('../storesList.json');
 const fs = require('fs');
-const csv = require('fast-csv');
 const path = require('path');
 const Iconv = require('iconv').Iconv;
 const Store = require('../models/Store');
 const http = require('http');
+
+let dataForImport = [];
+let convertedData = [];
 
 router.get('/:shopName/:productId', (req, res) => {
   Store.findOne({
@@ -46,15 +48,30 @@ router.post('/:shopName', (req, res) => {
           console.log(result);
 
           // Promise 3
-          deleteStoreFromDB(store)
+          convertCSVFile(store)
             .then(result => {
               console.log(result);
+              convertedData = [];
 
               // Promise 4
-              insertDataToDB(store)
+              deleteStoreFromDB(store)
                 .then(result => {
                   console.log(result);
-                  res.status(200).send('Магазин успешно обновлен / добавлен!');
+
+                  // Promise 5
+                  insertDataIntoDB(store)
+                    .then(result => {
+                      dataForImport = [];
+
+                      res
+                        .status(200)
+                        .send('Магазин успешно обновлен / добавлен!');
+                    })
+                    .catch(err => {
+                      return res.status(400).json({
+                        error: `Ошибка на шаге добавления данных в базу. ${err}`
+                      });
+                    });
                 })
                 .catch(err => {
                   return res.status(400).json({
@@ -64,7 +81,7 @@ router.post('/:shopName', (req, res) => {
             })
             .catch(err => {
               return res.status(400).json({
-                error: `Ошибка на шаге удаления данных из базы. ${err}`
+                error: `Ошибка на шаге конвертирования данных csv файла. ${err}`
               });
             });
         })
@@ -83,28 +100,47 @@ router.post('/:shopName', (req, res) => {
 
 const deleteOldDataFile = store => {
   return new Promise((resolve, reject) => {
-    const dest = path.resolve(__dirname, '..', 'datafiles', store.fileName);
+    let filesForDeletion = [];
 
-    fs.stat(dest, (err, stats) => {
-      if (err && err.code == 'ENOENT') {
-        resolve('Файл отсутствует! Удалять не нужно. Все ОК!');
-      }
+    const originalFile = path.resolve(
+      __dirname,
+      '..',
+      'datafiles',
+      store.fileName
+    );
+    const convertedFile = path.resolve(
+      __dirname,
+      '..',
+      'datafiles',
+      'conv-' + store.fileName
+    );
 
-      if (err) {
-        reject(err);
-      }
+    if (fs.existsSync(originalFile)) {
+      filesForDeletion.push(originalFile);
+    }
 
-      fs.unlink(
-        path.resolve(__dirname, '..', 'datafiles', store.fileName),
-        err => {
+    if (fs.existsSync(convertedFile)) {
+      filesForDeletion.push(convertedFile);
+    }
+
+    if (filesForDeletion.length > 0) {
+      filesForDeletion.forEach(fileForDeletion => {
+        fs.stat(fileForDeletion, err => {
           if (err) {
             reject(err);
           }
 
-          resolve('Файл успешно удален!');
-        }
-      );
-    });
+          fs.unlink(fileForDeletion, err => {
+            if (err) {
+              reject(err);
+            }
+            resolve('Файл успешно удален!');
+          });
+        });
+      });
+    } else {
+      resolve('Файлы удалять не нужно!');
+    }
   });
 };
 
@@ -131,7 +167,7 @@ const downloadNewDataFile = store => {
 
 const deleteStoreFromDB = store => {
   return new Promise((resolve, reject) => {
-    Store.collection.remove({ storeName: store.storeName }, (err, result) => {
+    Store.collection.remove({ storeName: store.storeName }, err => {
       if (err) {
         reject(err);
       } else {
@@ -141,20 +177,59 @@ const deleteStoreFromDB = store => {
   });
 };
 
-let dataForImport = [];
-
-const insertDataToDB = store => {
+const convertCSVFile = store => {
   return new Promise((resolve, reject) => {
-    const dest = path.resolve(__dirname, '..', 'datafiles', store.fileName);
+    const originalFile = path.resolve(
+      __dirname,
+      '..',
+      'datafiles',
+      store.fileName
+    );
+    const convertedFile = path.resolve(
+      __dirname,
+      '..',
+      'datafiles',
+      'conv-' + store.fileName
+    );
 
-    fs.createReadStream(dest)
+    const stream = fs.createReadStream(originalFile);
+    const output = fs.createWriteStream(convertedFile);
+
+    stream.on('data', data => {
+      let iconv = new Iconv('windows-1251', 'UTF-8');
+      let converted = iconv.convert(data).toString();
+
+      convertedData.push(converted);
+    });
+
+    stream.on('end', () => {
+      output.write(convertedData.toString());
+      resolve('CSV был успешно сконвертирован!');
+    });
+
+    stream.on('error', err => {
+      reject(err);
+    });
+  });
+};
+
+const insertDataIntoDB = store => {
+  return new Promise((resolve, reject) => {
+    const convertedFile = path.resolve(
+      __dirname,
+      '..',
+      'datafiles',
+      'conv-' + store.fileName
+    );
+
+    fs.createReadStream(convertedFile)
       .pipe(csv())
 
       .on('data', data => {
         prepareRow(data, store);
       })
-      .on('end', data => {
-        Store.collection.insert(dataForImport, (err, docs) => {
+      .on('end', () => {
+        Store.collection.insert(dataForImport, err => {
           if (err) {
             reject(err);
           } else {
@@ -167,9 +242,6 @@ const insertDataToDB = store => {
 
 const prepareRow = (data, store) => {
   const dataToString = data.toString();
-
-  // let iconv = new Iconv('windows-1255', 'UTF-8');
-  // let str = iconv.convert(dataToString).toString();
 
   const separator = store.separator;
   const arrayOfStrings = dataToString.split(separator);
