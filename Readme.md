@@ -79,3 +79,7 @@ GET --> http://localhost/niko-opt/BZ-1531C
 <br/>
 
 ![Application](/img/pic3.png?raw=true)
+
+<br/>
+
+![Application](/img/Results.jpg?raw=true)
