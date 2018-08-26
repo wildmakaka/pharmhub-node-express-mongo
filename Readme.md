@@ -5,7 +5,6 @@
 
 Примеры:  
 https://niko-opt.com/price_two.csv  
-http://opt.10x10.com.ua/opt10x10.csv  
 
 В каждом прайсе есть код товара (артикул), его название и цена.
 
@@ -86,6 +85,3 @@ GET --> http://localhost/niko-opt/BZ-1531C
 
 ![Application](/img/pic3.png?raw=true)
 
-<br/>
-
-![Application](/img/Results.jpg?raw=true)
